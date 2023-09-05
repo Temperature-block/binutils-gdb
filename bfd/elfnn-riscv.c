@@ -4773,7 +4773,7 @@ else
   abort ();
 
 return ret;
-
+}
 /* Relax non-PIC TLS references to TP-relative references.  */
 
 static bool

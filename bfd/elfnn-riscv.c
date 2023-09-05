@@ -4741,11 +4741,10 @@ _bfd_riscv_relax_tls_ie_to_le (bfd *abfd,
     return true;
 
   BFD_ASSERT (rel->r_offset + 4 <= sec->size);
-chek:
-  switch (ELFNN_R_TYPE (rel->r_info))
-    {
- //_RISCV_TLS_GOT_HI20 relaxation
-    case R_RISCV_TLS_GOT_HI20:
+
+  //_RISCV_TLS_GOT_HI20 relaxation
+  if (ELFNN_R_TYPE (rel->r_info) == R_RISCV_TLS_GOT_HI20)
+   {
       //here we do converion from auipc -> lui because both are utype instructions
      //attach R_RISCV_TPREL_HI20 relocation
         if(VALID_UTYPE_IMM (RISCV_CONST_HIGH_PART (symval) ))
@@ -4756,30 +4755,25 @@ chek:
 		bfd_putl32 (tolui , contents + rel->r_offset);
 		rel->r_info = ELFNN_R_INFO (ELFNN_R_SYM (rel->r_info) , R_RISCV_TPREL_HI20);
 		rel = rel + 1;
- 	goto chek;
+		if(ELFNN_R_TYPE (rel->r_info) == R_RISCV_PCREL_LO12_I
+			|| ELFNN_R_TYPE (rel->r_info) == R_RISCV_PCREL_LO12_S)
+		{
+		//delete the lo12 assosiated with previous hi20 as its no longer required
+		*again = true;
+		ret = riscv_relax_delete_bytes (abfd, sec, rel->r_offset, 4, link_info,
+							pcgp_relocs, rel);
+		}
 	}
         else
         {
 		abort();
         }
-        break;
-      //delete the lo12 assosiated with previous hi20 as its no longer required
-      case R_RISCV_PCREL_LO12_I:
-	*again = true;
-	ret = riscv_relax_delete_bytes (abfd, sec, rel->r_offset, 4, link_info,
-							pcgp_relocs, rel);
-	break;
-     case R_RISCV_PCREL_LO12_S:
-	*again = true;
-	ret = riscv_relax_delete_bytes (abfd, sec, rel->r_offset, 4, link_info,
-							pcgp_relocs, rel);
-	break;
-    default:
-	abort ();
     }
+else
+  abort ();
+
 return ret;
 
-}
 /* Relax non-PIC TLS references to TP-relative references.  */
 
 static bool

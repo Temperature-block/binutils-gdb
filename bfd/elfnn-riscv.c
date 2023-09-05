@@ -4745,7 +4745,7 @@ _bfd_riscv_relax_tls_ie_to_le (bfd *abfd,
   //_RISCV_TLS_GOT_HI20 relaxation
   if (ELFNN_R_TYPE (rel->r_info) == R_RISCV_TLS_GOT_HI20)
    {
-      //here we do converion from auipc -> lui because both are utype instructions
+      //here we convert auipc -> lui because both are utype instructions
      //attach R_RISCV_TPREL_HI20 relocation
         if(VALID_UTYPE_IMM (RISCV_CONST_HIGH_PART (symval) ))
 	{
@@ -4753,12 +4753,13 @@ _bfd_riscv_relax_tls_ie_to_le (bfd *abfd,
 		bfd_vma tolui = bfd_getl32(contents + rel->r_offset);
 		tolui = (tolui & ~MASK_AUIPC) | MATCH_LUI;
 		bfd_putl32 (tolui , contents + rel->r_offset);
-		rel->r_info = ELFNN_R_INFO (ELFNN_R_SYM (rel->r_info) , R_RISCV_TPREL_HI20);
+		rel->r_info = ELFNN_R_INFO (ELFNN_R_SYM (rel->r_info),
+	                                           R_RISCV_TPREL_HI20);
 		rel = rel + 1;
 		if(ELFNN_R_TYPE (rel->r_info) == R_RISCV_PCREL_LO12_I
 			|| ELFNN_R_TYPE (rel->r_info) == R_RISCV_PCREL_LO12_S)
 		{
-		//delete the lo12 assosiated with previous hi20 as its no longer required
+		//delete the lo12 assosiated with auipc as its not required
 		*again = true;
 		ret = riscv_relax_delete_bytes (abfd, sec, rel->r_offset, 4, link_info,
 							pcgp_relocs, rel);
@@ -4766,10 +4767,12 @@ _bfd_riscv_relax_tls_ie_to_le (bfd *abfd,
 	}
         else
         {
+		_bfd_error_handler (_("error : expected a U-type immediate"));
 		abort();
         }
     }
 else
+  _bfd_error_handler (_("expected R_RISCV_TLS_GOT_HI20 relocation"));
   abort ();
 
 return ret;
@@ -5126,8 +5129,10 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 	    continue;
 	  riscv_relax_delete_bytes = _riscv_relax_delete_piecewise;
 
-	  /* Only relax this reloc if it is paired with R_RISCV_RELAX.  */
-	  if(type == R_RISCV_TLS_GOT_HI20){}
+	  /* Only relax this reloc if it is paired with R_RISCV_RELAX.
+	  Temporarily permit R_RISCV_TLS_GOT_HI20
+	  till R_RISCV_RELAX is added.	*/
+	  if(type == R_RISCV_TLS_GOT_HI20);
 	  else if(i == sec->reloc_count - 1
 	      || ELFNN_R_TYPE ((rel + 1)->r_info) != R_RISCV_RELAX
 	      || rel->r_offset != (rel + 1)->r_offset)
@@ -5227,27 +5232,30 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 		 need the more rigorous checking for this optimization.  */
 	      undefined_weak = true;
 	    }
-          /* conditions to check ie -> le relaxation */
-          if (relax_func == _bfd_riscv_relax_tls_ie_to_le )
+	  /* conditions to check ie -> le relaxation */
+	  if (relax_func == _bfd_riscv_relax_tls_ie_to_le )
 	    {
-              bool need_reloc = false;
-              int ind=0;
-              bool dyn = htab->elf.dynamic_sections_created;
-              RISCV_TLS_GD_IE_NEED_DYN_RELOC(info, dyn, h, ind, need_reloc);
-              /* dont relax ie -> le if the relocation requires us to make dynamic relocations or when there are weak definitions or when we are not creating exec*/
-              if(need_reloc || h->root.type == bfd_link_hash_undefweak || h->root.type == bfd_link_hash_defweak || !(bfd_link_executable (info)) )
-                {
-                 skip_reloc = true;
-                 continue;
-                }
-              /* skip relocs of TPREL_ADD  TPREL_LO12_ I/S and PCREL_LO12_ I/S
-                 assuming that compiler emits these relocs for ie and 
-                 first occurence of these relocs after TLS_GOT_HI20 is related to ie*/
+	      bool need_reloc = false;
+	      int ind=0;
+	      bool dyn = htab->elf.dynamic_sections_created;
+	      RISCV_TLS_GD_IE_NEED_DYN_RELOC(info, dyn, h, ind, need_reloc);
+	      /* ToDo : don't relax for weak definitions
+	      and any other visibility to be considered .*/
+	      if(need_reloc || h->root.type == bfd_link_hash_undefweak
+	         || h->root.type == bfd_link_hash_defweak
+	         || !(bfd_link_executable (info)) )
+	       {
+		 skip_reloc = true;
+		 continue;
+	       }
+	  /* skip relocs of TPREL_ADD  TPREL_LO12_ I/S and PCREL_LO12_ I/S
+	     assuming that compiler emits these relocs for ie and
+	     first occurence of these relocs after TLS_GOT_HI20 is related to ie*/
 	    }
 	  if(skip_reloc && (relax_func == _bfd_riscv_relax_pc
                             || relax_func == _bfd_riscv_relax_tls_le))
 	    {
-             /* reset skip_reloc on final inst related to ie*/
+	      /* reset skip_reloc on final inst related to ie*/
 	      if(type == R_RISCV_TPREL_LO12_I || type == R_RISCV_TPREL_LO12_S)
 		  skip_reloc = false;
 	      continue;
